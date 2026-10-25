@@ -43,6 +43,8 @@ enum HIDBroker {
     static let serverIOTimeoutMilliseconds: Int = 2_000
     static let clientWriteTimeoutMilliseconds: Int = 2_000
     static let clientResponseTimeoutMilliseconds: Int = 30_000
+    // stays under the client response timeout so a valid request never looks lost
+    static let maximumRequestDelaySeconds: Double = 20
     static let startupAttempts = 300
     static let startupTimeoutNanoseconds: UInt64 = 30_000_000_000
     static func sendTouchPrimitives(
@@ -144,8 +146,9 @@ enum HIDBroker {
 
         var shouldContinue = true
         do {
-            let data = try readMessage(from: client)
+            let data = try readMessage(from: client, timeoutMilliseconds: serverIOTimeoutMilliseconds)
             let request = try JSONDecoder().decode(HIDBrokerRequest.self, from: data)
+            try validatePrimitives(request.primitives)
             for primitive in request.primitives {
                 switch primitive.kind {
                 case .down, .up:
@@ -176,6 +179,27 @@ enum HIDBroker {
             try? writeResponse(error: brokerResponseDescription(for: error), to: client)
         }
         return shouldContinue
+    }
+
+    // reject the whole request before the first event so a bad request never runs partially
+    static func validatePrimitives(_ primitives: [HIDBrokerPrimitive]) throws {
+        var totalDelay = 0.0
+        for primitive in primitives {
+            switch primitive.kind {
+            case .down, .up:
+                guard let x = primitive.x, let y = primitive.y, x.isFinite, y.isFinite else {
+                    throw CLIError(errorDescription: "Touch primitive coordinates are missing or invalid.")
+                }
+            case .delay:
+                guard let duration = primitive.duration, duration >= 0, duration <= 10 else {
+                    throw CLIError(errorDescription: "HID broker delay is invalid.")
+                }
+                totalDelay += duration
+            }
+        }
+        guard totalDelay <= maximumRequestDelaySeconds else {
+            throw CLIError(errorDescription: "HID broker request delays exceed \(Int(maximumRequestDelaySeconds)) seconds in total.")
+        }
     }
 
     static func brokerResponseDescription(for error: Error) -> String {

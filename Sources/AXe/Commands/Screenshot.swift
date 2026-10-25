@@ -34,17 +34,17 @@ struct Screenshot: AsyncParsableCommand {
             throw CLIError(errorDescription: "Simulator \(trimmedUDID) is not booted. Current state: \(stateDescription)")
         }
 
-        let outputURL = try prepareOutputURL(simulator: targetSimulator)
+        let outputURL = try prepareOutputURL(simulatorName: targetSimulator.name)
 
         let screenshotData = try await VideoFrameUtilities.captureScreenshotData(from: targetSimulator)
 
-        try screenshotData.write(to: outputURL)
+        try OutputFileWriter.write(screenshotData, to: outputURL)
 
         FileHandle.standardError.write(Data("Screenshot saved to \(outputURL.path)\n".utf8))
         print(outputURL.path)
     }
 
-    private func prepareOutputURL(simulator: FBSimulator) throws -> URL {
+    func prepareOutputURL(simulatorName: String) throws -> URL {
         let fileManager = FileManager.default
 
         let providedPath = output?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -53,7 +53,7 @@ struct Screenshot: AsyncParsableCommand {
             resolvedPath = (providedPath as NSString).expandingTildeInPath
         } else {
             let timestamp = Self.formatTimestamp(Date())
-            resolvedPath = "Simulator Screenshot - \(simulator.name) - \(timestamp).png"
+            resolvedPath = "Simulator Screenshot - \(simulatorName) - \(timestamp).png"
         }
 
         let baseURL: URL
@@ -66,7 +66,7 @@ struct Screenshot: AsyncParsableCommand {
         var isDirectory: ObjCBool = false
         if fileManager.fileExists(atPath: baseURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
             let timestamp = Self.formatTimestamp(Date())
-            let filename = "Simulator Screenshot - \(simulator.name) - \(timestamp).png"
+            let filename = "Simulator Screenshot - \(simulatorName) - \(timestamp).png"
             let directoryURL = baseURL
             if !fileManager.fileExists(atPath: directoryURL.path) {
                 try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true, attributes: nil)
@@ -85,7 +85,6 @@ struct Screenshot: AsyncParsableCommand {
             if existingIsDirectory.boolValue {
                 throw CLIError(errorDescription: "Output path \(baseURL.path) is a directory. Provide a file name or point to a different location.")
             }
-            try fileManager.removeItem(at: baseURL)
         }
 
         return baseURL

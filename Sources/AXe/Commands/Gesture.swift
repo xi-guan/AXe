@@ -144,7 +144,7 @@ struct Gesture: AsyncParsableCommand {
         
         // Validate delta if provided
         if let delta = delta {
-            guard delta > 0 && delta <= 200 else {
+            guard delta >= 1 && delta <= 200 else {
                 throw ValidationError("Delta must be between 1 and 200 pixels.")
             }
         }

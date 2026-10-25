@@ -71,18 +71,22 @@ struct RecordVideo: AsyncParsableCommand {
         }
         defer { signalObserver.invalidate() }
 
+        // record beside the destination and move it into place only after the writer finishes
+        let temporaryURL = OutputFileWriter.temporaryURL(nextTo: outputURL)
         do {
             try await recordVideo(
                 simulator: targetSimulator,
-                outputURL: outputURL,
+                outputURL: temporaryURL,
                 fps: fps,
                 quality: quality,
                 scale: scale,
                 cancellationFlag: cancellationFlag
             )
+            try OutputFileWriter.replaceItem(at: outputURL, withItemAt: temporaryURL)
             FileHandle.standardError.write(Data("Recording saved to \(outputURL.path)\n".utf8))
             print(outputURL.path)
         } catch {
+            try? FileManager.default.removeItem(at: temporaryURL)
             throw CLIError(errorDescription: "Failed to record video: \(error.localizedDescription)")
         }
     }
@@ -166,7 +170,7 @@ struct RecordVideo: AsyncParsableCommand {
         try await recorder.finish()
     }
 
-    private func prepareOutputURL() throws -> URL {
+    func prepareOutputURL() throws -> URL {
         let fileManager = FileManager.default
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
@@ -207,7 +211,6 @@ struct RecordVideo: AsyncParsableCommand {
             if existingIsDirectory.boolValue {
                 throw CLIError(errorDescription: "Output path \(baseURL.path) is a directory. Provide a file name or point to a different location.")
             }
-            try fileManager.removeItem(at: baseURL)
         }
 
         return baseURL

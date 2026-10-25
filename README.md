@@ -53,6 +53,10 @@ axe describe-ui --udid "$UDID"
 axe tap --label "Continue" --udid "$UDID"
 axe type 'Hello world' --udid "$UDID"
 axe screenshot --output ./screen.png --udid "$UDID"
+
+# Disconnect the Mac keyboard so text fields show the iOS software keyboard
+# (presses Shift once first; run it again if the software keyboard still disappears)
+axe hardware-keyboard off --udid "$UDID"
 ```
 
 ## Documentation

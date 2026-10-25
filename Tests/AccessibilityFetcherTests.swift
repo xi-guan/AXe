@@ -264,6 +264,53 @@ struct AccessibilityFetcherTests {
         #expect(fetchCount == 1)
     }
 
+    @Test("Waits for frontmost descendants when the full hierarchy is needed")
+    func retriesUntilDescendantsAppear() async throws {
+        let rootOnly = try JSONSerialization.data(withJSONObject: [[
+            "type": "Application",
+            "children": [],
+        ]])
+        let populated = try JSONSerialization.data(withJSONObject: [[
+            "type": "Application",
+            "children": [["type": "Button", "children": []]],
+        ]])
+        var responses = [rootOnly, rootOnly, populated]
+        var waits: [Duration] = []
+
+        let result = try await AccessibilityFetcher.retryingUntilDescendantsAppear(
+            maximumAttempts: 5,
+            fetch: { responses.removeFirst() },
+            wait: { waits.append($0) }
+        )
+
+        #expect(result == populated)
+        #expect(responses.isEmpty)
+        #expect(waits == [.milliseconds(50), .milliseconds(100)])
+    }
+
+    @Test("Coordinate mapping requests only the application frame and never waits for descendants")
+    func applicationFrameFetchDoesNotWait() async throws {
+        #expect(AccessibilityFetcher.applicationFrameRequestKeys == [.type, .frameDict])
+        let rootOnly = try JSONSerialization.data(withJSONObject: [[
+            "type": "Application",
+            "frame": ["x": 0, "y": 0, "width": 390, "height": 844],
+            "children": [],
+        ]])
+        var fetchCount = 0
+
+        let result = try await AccessibilityFetcher.retryingUntilDescendantsAppear(
+            maximumAttempts: AccessibilityFetcher.applicationFrameFetchAttempts,
+            fetch: {
+                fetchCount += 1
+                return rootOnly
+            },
+            wait: { _ in Issue.record("Coordinate mapping should not wait for descendants") }
+        )
+
+        #expect(result == rootOnly)
+        #expect(fetchCount == 1)
+    }
+
     @Test("Rejects accessibility payloads that are not dictionaries or arrays")
     func rejectsInvalidAccessibilityPayload() {
         #expect(throws: CLIError.self) {

@@ -35,8 +35,11 @@ struct AccessibilityFetcher {
         for simulatorUDID: String,
         point: AccessibilityPoint? = nil,
         logger: AxeLogger,
-        recoveryDependencies: AccessibilityRecoveryDependencies = .live
+        recoveryDependencies: AccessibilityRecoveryDependencies = .live,
+        keys: Set<FBAXKeys>? = nil,
+        maximumAttempts: Int = 5
     ) async throws -> Data {
+        let keys = keys ?? accessibilityRequestKeys
         let simulatorSet = try await getSimulatorSet(deviceSetPath: nil, logger: logger, reporter: EmptyEventReporter.shared)
         
         guard let target = simulatorSet.allSimulators.first(where: { $0.udid == simulatorUDID }) else {
@@ -51,7 +54,11 @@ struct AccessibilityFetcher {
             if let point {
                 return try await fetchAccessibilityInfoJSONData(from: target, at: point)
             }
-            return try await fetchFrontmostAccessibilityInfoJSONData(from: target)
+            return try await fetchFrontmostAccessibilityInfoJSONData(
+                from: target,
+                keys: keys,
+                maximumAttempts: maximumAttempts
+            )
         }
     }
 
@@ -92,26 +99,37 @@ struct AccessibilityFetcher {
         return latestData
     }
 
-    private static func fetchFrontmostAccessibilityInfoJSONData(from target: FBSimulator) async throws -> Data {
-        var latestData: Data?
-        for attempt in 0..<5 {
+    private static func fetchFrontmostAccessibilityInfoJSONData(
+        from target: FBSimulator,
+        keys: Set<FBAXKeys>,
+        maximumAttempts: Int
+    ) async throws -> Data {
+        try await retryingUntilDescendantsAppear(maximumAttempts: maximumAttempts) {
             // IDB's former `accessibilityElements(withNestedFormat:)` API also serialized the
             // frontmost application internally. This explicit handle API preserves that scope.
             let accessibilityElement = try await target.accessibilityElementForFrontmostApplication()
-            let data: Data
-            do {
-                data = try serializedAccessibilityData(from: accessibilityElement)
-                accessibilityElement.close()
-            } catch {
-                accessibilityElement.close()
-                throw error
-            }
+            defer { accessibilityElement.close() }
+            return try serializedAccessibilityData(from: accessibilityElement, keys: keys)
+        }
+    }
+
+    static func retryingUntilDescendantsAppear(
+        maximumAttempts: Int,
+        fetch: @MainActor () async throws -> Data,
+        wait: @MainActor (Duration) async throws -> Void = { duration in
+            try await Task.sleep(for: duration)
+        }
+    ) async throws -> Data {
+        precondition(maximumAttempts > 0)
+        var latestData: Data?
+        for attempt in 0..<maximumAttempts {
+            let data = try await fetch()
             latestData = data
             if try containsAccessibilityDescendant(in: data) {
                 return data
             }
-            if attempt < 4 {
-                try await Task.sleep(for: .milliseconds(50 * (1 << attempt)))
+            if attempt < maximumAttempts - 1 {
+                try await wait(.milliseconds(50 * (1 << attempt)))
             }
         }
         guard let latestData else {
@@ -251,11 +269,14 @@ struct AccessibilityFetcher {
         process.waitUntilExit()
     }
 
-    private static func serializedAccessibilityData(from accessibilityElement: FBAccessibilityElement) throws -> Data {
+    private static func serializedAccessibilityData(
+        from accessibilityElement: FBAccessibilityElement,
+        keys: Set<FBAXKeys>? = nil
+    ) throws -> Data {
         let response = try accessibilityElement.serialize(
             with: FBAccessibilityRequestOptions(
                 nestedFormat: true,
-                keys: accessibilityRequestKeys
+                keys: keys ?? accessibilityRequestKeys
             )
         )
         return try serializeAccessibilityInfo(addingCompatibilityDefaults(to: response.elements))
@@ -351,12 +372,28 @@ struct AccessibilityFetcher {
 
     static func fetchAccessibilityElements(for simulatorUDID: String, logger: AxeLogger) async throws -> [AccessibilityElement] {
         let jsonData = try await fetchAccessibilityInfoJSONData(for: simulatorUDID, point: nil, logger: logger)
+        return try decodeAccessibilityElements(from: jsonData)
+    }
+
+    // coordinate mapping reads only the root application frame, so skip the other keys and the descendant wait
+    static func fetchApplicationFrameElements(for simulatorUDID: String, logger: AxeLogger) async throws -> [AccessibilityElement] {
+        let jsonData = try await fetchAccessibilityInfoJSONData(
+            for: simulatorUDID,
+            point: nil,
+            logger: logger,
+            keys: applicationFrameRequestKeys,
+            maximumAttempts: applicationFrameFetchAttempts
+        )
+        return try decodeAccessibilityElements(from: jsonData)
+    }
+
+    private static func decodeAccessibilityElements(from jsonData: Data) throws -> [AccessibilityElement] {
         let decoder = JSONDecoder()
-        
+
         if let roots = try? decoder.decode([AccessibilityElement].self, from: jsonData) {
             return roots
         }
-        
+
         let root = try decoder.decode(AccessibilityElement.self, from: jsonData)
         return [root]
     }
@@ -408,4 +445,7 @@ struct AccessibilityFetcher {
     // returns an empty hierarchy when `.traits` is requested, so retain the existing public value
     // as an empty compatibility placeholder after requesting the safe subset on every Xcode version.
     static let accessibilityRequestKeys = accessibilityOutputKeys.subtracting([.traits])
+
+    static let applicationFrameRequestKeys: Set<FBAXKeys> = [.type, .frameDict]
+    static let applicationFrameFetchAttempts = 1
 }

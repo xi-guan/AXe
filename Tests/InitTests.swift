@@ -68,6 +68,48 @@ struct InitTests {
         #expect(!FileManager.default.fileExists(atPath: installedDirectory))
     }
 
+    @Test("uninstall keeps files it did not install")
+    func uninstallKeepsUnrelatedFiles() async throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let skillsDir = tempRoot.appendingPathComponent("skills", isDirectory: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+
+        _ = try await TestHelpers.runAxeCommand("init --dest \(skillsDir.path)")
+        let notes = skillsDir.appendingPathComponent("axe/notes.md")
+        try "keep".write(to: notes, atomically: true, encoding: .utf8)
+
+        _ = try await TestHelpers.runAxeCommand("init --dest \(skillsDir.path) --uninstall")
+
+        #expect(!FileManager.default.fileExists(atPath: skillsDir.appendingPathComponent("axe/SKILL.md").path))
+        #expect(FileManager.default.fileExists(atPath: notes.path))
+    }
+
+    @Test("uninstall leaves a directory without an AXe skill untouched")
+    func uninstallIgnoresForeignDirectory() async throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let foreignDir = tempRoot.appendingPathComponent("axe", isDirectory: true)
+        let foreignSkill = foreignDir.appendingPathComponent("SKILL.md")
+        let readme = foreignDir.appendingPathComponent("README.md")
+
+        try FileManager.default.createDirectory(at: foreignDir, withIntermediateDirectories: true)
+        try "---\nname: other\n---\n".write(to: foreignSkill, atomically: true, encoding: .utf8)
+        try "repo".write(to: readme, atomically: true, encoding: .utf8)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+
+        _ = try await TestHelpers.runAxeCommandAllowFailure("init --dest \(tempRoot.path) --uninstall")
+
+        #expect(FileManager.default.fileExists(atPath: foreignSkill.path))
+        #expect(FileManager.default.fileExists(atPath: readme.path))
+    }
+
     @Test("non-interactive mode requires explicit target")
     func nonInteractiveModeRequiresExplicitTarget() async throws {
         let result = try await TestHelpers.runAxeCommandAllowFailure("init")

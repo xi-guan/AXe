@@ -31,6 +31,7 @@ struct Axe: AsyncParsableCommand {
             StreamVideo.self,
             RecordVideo.self,
             Screenshot.self,
+            HardwareKeyboard.self,
             Batch.self,
             HIDBrokerCommand.self
         ]

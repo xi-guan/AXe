@@ -414,4 +414,61 @@ struct HIDBrokerTests {
         } catch {}
         #expect(Date().timeIntervalSince(start) < 1)
     }
+
+    @Test("A slowly dripped message cannot extend a broker read past its total deadline")
+    func drippedMessageReadHasTotalDeadline() throws {
+        var descriptors = [Int32](repeating: -1, count: 2)
+        #expect(socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0)
+        defer {
+            Darwin.close(descriptors[0])
+        }
+
+        try HIDBroker.configureSocketTimeouts(
+            descriptors[0],
+            readMilliseconds: 200,
+            writeMilliseconds: 200
+        )
+        let writer = descriptors[1]
+        let writerFinished = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            defer {
+                Darwin.close(writer)
+                writerFinished.signal()
+            }
+            var byte: UInt8 = 0x20
+            for _ in 0..<40 {
+                guard Darwin.write(writer, &byte, 1) == 1 else { return }
+                usleep(50_000)
+            }
+        }
+
+        let start = Date()
+        do {
+            _ = try HIDBroker.readMessage(from: descriptors[0], timeoutMilliseconds: 300)
+            Issue.record("A dripped message should hit the total read deadline")
+        } catch {}
+        #expect(Date().timeIntervalSince(start) < 1)
+        Darwin.shutdown(descriptors[0], SHUT_RDWR)
+        #expect(writerFinished.wait(timeout: .now() + 3) == .success)
+    }
+
+    @Test("Broker requests are validated before any primitive runs")
+    func brokerRequestsAreValidatedUpFront() {
+        #expect(throws: Never.self) {
+            try HIDBroker.validatePrimitives([
+                .touch(.down, x: 10, y: 20),
+                .delay(5),
+                .touch(.up, x: 10, y: 20),
+            ])
+        }
+        #expect(throws: (any Error).self) {
+            try HIDBroker.validatePrimitives([.delay(10), .delay(10), .delay(10)])
+        }
+        #expect(throws: (any Error).self) {
+            try HIDBroker.validatePrimitives([.touch(.down, x: .infinity, y: 20)])
+        }
+        #expect(throws: (any Error).self) {
+            try HIDBroker.validatePrimitives([.delay(.nan)])
+        }
+    }
 }

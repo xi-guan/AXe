@@ -115,7 +115,7 @@ struct StreamVideo: AsyncParsableCommand {
             let frameStartTime = Date()
 
             do {
-                let screenshotData = try await VideoFrameUtilities.captureScreenshotData(from: simulator)
+                let screenshotData = try await VideoFrameUtilities.captureScreenshotData(from: simulator, format: .jpeg)
                 let processedData = try await VideoFrameUtilities.processJPEGData(screenshotData, scale: scale, quality: quality)
 
                 switch format {

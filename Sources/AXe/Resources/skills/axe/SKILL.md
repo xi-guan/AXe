@@ -11,7 +11,7 @@ description: Provides agent-ready AXe CLI usage guidance for iOS Simulator autom
 
 ## Step 2: Choose the right command
 
-Available commands: `init`, `tap`, `slider`, `swipe`, `drag`, `gesture`, `touch`, `type`, `button`, `key`, `key-sequence`, `key-combo`, `batch`, `describe-ui`, `screenshot`, `record-video`, `stream-video`, `list-simulators`. Run `axe --help` or `axe <command> --help` for full options.
+Available commands: `init`, `tap`, `slider`, `swipe`, `drag`, `gesture`, `touch`, `type`, `button`, `key`, `key-sequence`, `key-combo`, `batch`, `describe-ui`, `screenshot`, `record-video`, `stream-video`, `hardware-keyboard`, `list-simulators`. Run `axe --help` or `axe <command> --help` for full options.
 
 Common examples:
 ```bash
@@ -42,6 +42,7 @@ Most HID commands (`tap`, `swipe`, `drag`, `type`, `key`, etc.) are fire-and-for
 - Use `axe slider --id <identifier> --value <0-100>` for sliders instead of approximating with raw swipe coordinates; it uses one calibrated low-level HID drag from the resolved slider frame/current AXValue, through the same composite touch-move path as `drag`, verifies the result within tolerance, and fails clearly if the observed AXValue remains outside tolerance.
 - For text with shell-sensitive characters, prefer `--stdin` or `--file` over inline quotes.
 - Use single quotes for inline text arguments to avoid shell expansion issues.
+- Run `axe hardware-keyboard off --udid <UDID>` before checking layouts that depend on the iOS software keyboard; while the Mac hardware keyboard is connected, focusing a field shows only a small toolbar. The first keyboard event after boot reconnects it, so `off` presses Shift once before disconnecting; run the command again if the software keyboard still disappears. `axe hardware-keyboard on --udid <UDID>` reconnects it.
 
 ## Step 5: Batch vs discrete commands
 

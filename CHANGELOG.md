@@ -5,6 +5,28 @@ All notable changes to the AXe iOS testing framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added `axe hardware-keyboard on|off --udid <UDID>` to connect or disconnect the simulator hardware keyboard without touching Simulator.app, so text fields can show the iOS software keyboard.
+
+### Changed
+
+- Changed coordinate-based `tap`, `swipe`, `touch`, `drag`, `slider`, and matching batch steps to read only the application frame for orientation mapping instead of serializing the full accessibility tree, and to stop waiting for descendants on screens without accessibility content.
+- Changed selector-based `tap` to reuse the accessibility tree it matched against for orientation mapping instead of fetching it a second time.
+- Changed `type` logging to record only the input length instead of the typed text.
+
+### Fixed
+
+- Fixed `batch` errors echoing the first word of unsupported lines, which could print the contents of an arbitrary `--file` to stderr.
+- Fixed `batch` step failures reporting "The operation couldn't be completed" instead of the actual validation or argument error.
+- Fixed `screenshot` and `record-video` following a symlink planted at the output path, and deleting an existing output file before the capture succeeded.
+- Fixed `init --uninstall` recursively deleting the target `axe` directory; it now removes only an AXe-installed `SKILL.md` and keeps other files.
+- Fixed `stream-video` sending PNG frames labelled as JPEG with the default scale and quality.
+- Fixed non-finite coordinates, sub-pixel `gesture --delta`, swipe deltas that would create unbounded step counts, and unbounded batch `sleep` values crashing or exhausting memory.
+- Fixed a slow or oversized HID broker request holding the broker indefinitely; requests now have an overall read deadline and are validated before any event is sent.
+
 ## [v1.8.0] - 2026-07-20
 
 ### Added

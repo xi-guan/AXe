@@ -66,8 +66,11 @@ enum VideoProcessingError: LocalizedError, UserFacingError {
 }
 
 struct VideoFrameUtilities {
-    static func captureScreenshotData(from simulator: FBSimulator) async throws -> Data {
-        try await simulator.takeScreenshot(format: .png)
+    static func captureScreenshotData(
+        from simulator: FBSimulator,
+        format: FBScreenshotFormat = .png
+    ) async throws -> Data {
+        try await simulator.takeScreenshot(format: format)
     }
 
     static func makeCGImage(from data: Data) -> CGImage? {
@@ -80,10 +83,14 @@ struct VideoFrameUtilities {
     static func processJPEGData(_ data: Data, scale: Double, quality: Int) async throws -> Data {
         if scale < 1.0 {
             return try await scaleJPEGData(data, scale: scale, quality: quality)
-        } else if quality != 80 {
+        } else if quality != 80 || !isJPEG(data) {
             return try await reencodeJPEGData(data, quality: quality)
         }
         return data
+    }
+
+    private static func isJPEG(_ data: Data) -> Bool {
+        data.starts(with: [0xFF, 0xD8])
     }
 
     static func computeDimensions(for image: CGImage, scale: Double) -> (width: Int, height: Int) {

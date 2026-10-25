@@ -109,7 +109,7 @@ struct Batch: AsyncParsableCommand {
             var stepName = "<unparsed>"
             do {
                 let tokens = try ShellTokenizer.tokenize(line)
-                stepName = tokens.first ?? "<empty>"
+                stepName = Self.stepLabel(for: tokens)
                 let primitives = try await BatchStepParser.parseStepTokens(
                     tokens,
                     globalUDID: simulatorUDID,
@@ -119,9 +119,9 @@ struct Batch: AsyncParsableCommand {
                 try await runner.run(BatchPlan(primitives: primitives))
             } catch {
                 if continueOnError {
-                    failures.append("Step \(index + 1) failed: [\(stepName)] -> \(error.localizedDescription)")
+                    failures.append("Step \(index + 1) failed: [\(stepName)] -> \(Self.stepFailureReason(for: error))")
                 } else {
-                    throw CLIError(errorDescription: "Step \(index + 1) failed: [\(stepName)]\n\(error.localizedDescription)")
+                    throw CLIError(errorDescription: "Step \(index + 1) failed: [\(stepName)]\n\(Self.stepFailureReason(for: error))")
                 }
             }
         }
@@ -132,6 +132,17 @@ struct Batch: AsyncParsableCommand {
         }
 
         print("✓ Batch completed successfully (\(stepLines.count) steps)")
+    }
+
+    // step files may be arbitrary files, so never echo tokens that are not step names
+    static func stepLabel(for tokens: [String]) -> String {
+        guard let first = tokens.first else { return "<empty>" }
+        return BatchStepKind(rawValue: first) == nil ? "<unsupported>" : first
+    }
+
+    // ArgumentParser errors are not LocalizedError, so localizedDescription hides their message
+    static func stepFailureReason(for error: Error) -> String {
+        message(for: error)
     }
 
     private func loadStepLines() throws -> [String] {

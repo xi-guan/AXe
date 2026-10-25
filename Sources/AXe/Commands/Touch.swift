@@ -38,6 +38,10 @@ struct Touch: AsyncParsableCommand {
 
 
     func validate() throws {
+        guard pointX.isFinite, pointY.isFinite else {
+            throw ValidationError("Coordinates must be finite numbers.")
+        }
+
         // Validate coordinates are non-negative
         guard pointX >= 0, pointY >= 0 else {
             throw ValidationError("Coordinates must be non-negative values.")

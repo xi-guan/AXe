@@ -18,6 +18,15 @@ struct VideoFrameUtilitiesTests {
         #expect(image.height == 1311)
     }
 
+    @Test("Compressed stream frames are JPEG even with default scale and quality")
+    func compressedStreamFramesAreJPEGByDefault() async throws {
+        let source = try makePNG(width: 64, height: 128)
+
+        let processed = try await VideoFrameUtilities.processJPEGData(source, scale: 1.0, quality: 80)
+
+        #expect(processed.prefix(2) == Data([0xFF, 0xD8]))
+    }
+
     private func makePNG(width: Int, height: Int) throws -> Data {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let context = try #require(CGContext(

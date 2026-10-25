@@ -155,6 +155,15 @@ axe button siri --udid <UDID>
 axe button apple-pay --udid <UDID>
 ```
 
+## Hardware keyboard
+
+```bash
+axe hardware-keyboard off --udid <UDID>    # Disconnect; text fields show the iOS software keyboard
+axe hardware-keyboard on --udid <UDID>     # Reconnect the Mac keyboard
+```
+
+Does not touch Simulator.app. The first keyboard event after boot reconnects the hardware keyboard, so `off` presses Shift once before disconnecting; run `off` again if the software keyboard still disappears.
+
 ## Batch (multi-step workflows)
 
 ```bash

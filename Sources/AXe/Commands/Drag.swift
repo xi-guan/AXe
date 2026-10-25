@@ -40,6 +40,9 @@ struct Drag: AsyncParsableCommand {
     var simulatorUDID: String
 
     func validate() throws {
+        guard [startX, startY, endX, endY].allSatisfy(\.isFinite) else {
+            throw ValidationError("Coordinates must be finite numbers.")
+        }
         guard startX >= 0, startY >= 0, endX >= 0, endY >= 0 else {
             throw ValidationError("Coordinates must be non-negative values.")
         }

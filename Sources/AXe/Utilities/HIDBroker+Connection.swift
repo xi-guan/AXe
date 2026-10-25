@@ -272,10 +272,17 @@ extension HIDBroker {
         guard unlink(path) == 0 || errno == ENOENT else { throw posixError("unlink") }
     }
 
-    static func readMessage(from descriptor: Int32) throws -> Data {
+    static func readMessage(from descriptor: Int32, timeoutMilliseconds: Int? = nil) throws -> Data {
+        // SO_RCVTIMEO restarts on every byte, so a trickling peer needs an overall deadline
+        let deadline = timeoutMilliseconds.map {
+            monotonicTimeNanoseconds() + UInt64(max(0, $0)) * 1_000_000
+        }
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
         while data.count <= maximumMessageBytes {
+            if let deadline, monotonicTimeNanoseconds() >= deadline {
+                throw CLIError(errorDescription: "HID broker read timed out.")
+            }
             let count = Darwin.read(descriptor, &buffer, buffer.count)
             if count < 0 {
                 if errno == EINTR { continue }

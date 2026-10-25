@@ -74,19 +74,20 @@ struct Type: AsyncParsableCommand {
         case (let positionalText?, false, nil):
             // Positional argument
             inputText = positionalText
-            logger.info().log("Using positional text input: '\(inputText)'")
+            // typed text can be a password and the unified log is public, so log only its length
+            logger.info().log("Using positional text input (\(inputText.count) characters)")
             
         case (nil, true, nil):
             // Read from stdin
             logger.info().log("Reading text from standard input...")
             inputText = readFromStdin()
-            logger.info().log("Read from stdin: '\(inputText)'")
+            logger.info().log("Read \(inputText.count) characters from stdin")
             
         case (nil, false, let file?):
             // Read from file
             logger.info().log("Reading text from file: \(file)")
             inputText = try readFromFile(file)
-            logger.info().log("Read from file: '\(inputText)'")
+            logger.info().log("Read \(inputText.count) characters from file")
             
         case (nil, false, nil):
             // No input provided

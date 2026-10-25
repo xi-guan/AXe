@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-enum BatchStepKind: String {
+enum BatchStepKind: String, CaseIterable {
     case tap
     case swipe
     case gesture
@@ -16,6 +16,9 @@ enum BatchStepKind: String {
 
 @MainActor
 struct BatchStepParser {
+    // Duration.seconds traps on values this large, so bound sleeps well below that
+    private static let maximumSleepSeconds: Double = 3600
+
     static func parseStepTokens(
         _ tokens: [String],
         globalUDID: String,
@@ -27,7 +30,8 @@ struct BatchStepParser {
         }
 
         guard let kind = BatchStepKind(rawValue: firstToken) else {
-            throw ValidationError("Unsupported batch step '\(firstToken)'.")
+            let supported = BatchStepKind.allCases.map(\.rawValue).joined(separator: ", ")
+            throw ValidationError("Unsupported batch step. Supported steps: \(supported).")
         }
 
         if kind == .sleep {
@@ -85,8 +89,8 @@ struct BatchStepParser {
         guard tokens.count == 2 else {
             throw ValidationError("Sleep step format: sleep <seconds>")
         }
-        guard let seconds = Double(tokens[1]), seconds >= 0 else {
-            throw ValidationError("Sleep step requires a non-negative number of seconds.")
+        guard let seconds = Double(tokens[1]), seconds >= 0, seconds <= maximumSleepSeconds else {
+            throw ValidationError("Sleep step requires a number of seconds between 0 and \(Int(maximumSleepSeconds)).")
         }
         return [.hostSleep(seconds)]
     }

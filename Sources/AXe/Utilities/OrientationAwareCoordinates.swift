@@ -123,7 +123,7 @@ struct OrientationAwareCoordinates {
         orientationOverride: SimulatorOrientation? = nil,
         logger: AxeLogger
     ) async throws -> CoordinateMapping {
-        let roots = try await AccessibilityFetcher.fetchAccessibilityElements(
+        let roots = try await AccessibilityFetcher.fetchApplicationFrameElements(
             for: simulatorUDID,
             logger: logger
         )

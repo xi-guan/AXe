@@ -36,23 +36,34 @@ struct Swipe: AsyncParsableCommand {
     var simulatorUDID: String
 
 
+    // IDB builds one HID event per step, so a tiny delta would exhaust memory
+    private static let maxSteps = 10_000
+
     func validate() throws {
+        guard [startX, startY, endX, endY].allSatisfy(\.isFinite) else {
+            throw ValidationError("Coordinates must be finite numbers.")
+        }
+
         // Validate coordinates are non-negative
         guard startX >= 0, startY >= 0, endX >= 0, endY >= 0 else {
             throw ValidationError("Coordinates must be non-negative values.")
         }
-        
+
         // Validate duration if provided
         if let duration = duration {
-            guard duration > 0 else {
+            guard duration > 0, duration.isFinite else {
                 throw ValidationError("Duration must be greater than 0.")
             }
         }
-        
+
         // Validate delta if provided
         if let delta = delta {
             guard delta > 0 else {
                 throw ValidationError("Delta must be greater than 0.")
+            }
+            let distance = hypot(endX - startX, endY - startY)
+            guard distance / delta <= Double(Self.maxSteps) else {
+                throw ValidationError("Delta is too small for this swipe distance (at most \(Self.maxSteps) steps).")
             }
         }
         

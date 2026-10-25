@@ -50,6 +50,9 @@ struct Tap: AsyncParsableCommand {
             guard let pointX, let pointY else {
                 throw ValidationError("Both -x and -y must be provided together.")
             }
+            guard pointX.isFinite, pointY.isFinite else {
+                throw ValidationError("Coordinates must be finite numbers.")
+            }
             guard pointX >= 0, pointY >= 0 else {
                 throw ValidationError("Coordinates must be non-negative values.")
             }
@@ -104,6 +107,7 @@ struct Tap: AsyncParsableCommand {
 
         let resolution: TapResolution
         let resolvedDescription: String
+        var resolvedRoots: [AccessibilityElement]?
 
         if let pointX, let pointY {
             resolution = TapResolution(point: (x: pointX, y: pointY), isSwitchLikeControl: false)
@@ -121,14 +125,17 @@ struct Tap: AsyncParsableCommand {
             }
 
             do {
-                resolution = try await AccessibilityPoller.resolveWithPolling(
+                resolution = try await AccessibilityPoller.pollForResolution(
                     query: query,
-                    simulatorUDID: simulatorUDID,
                     waitTimeout: waitTimeout,
                     pollInterval: pollInterval,
                     elementType: elementType,
                     logger: logger
-                )
+                ) {
+                    let roots = try await AccessibilityFetcher.fetchAccessibilityElements(for: simulatorUDID, logger: logger)
+                    resolvedRoots = roots
+                    return roots
+                }
             } catch let error as ElementResolutionError {
                 print("Warning: \(error.localizedDescription) No tap performed.", to: &standardError)
                 throw error
@@ -139,11 +146,22 @@ struct Tap: AsyncParsableCommand {
 
         logger.info().log("Tapping at \(resolvedDescription)")
 
-        let physicalPoint = try await OrientationAwareCoordinates.translate(
-            point: resolution.point,
-            for: simulatorUDID,
-            logger: logger
-        )
+        // reuse the tree the selector matched against instead of fetching it again
+        let physicalPoint: (x: Double, y: Double)
+        if let resolvedRoots {
+            physicalPoint = try await OrientationAwareCoordinates.translate(
+                point: resolution.point,
+                roots: resolvedRoots,
+                for: simulatorUDID,
+                logger: logger
+            )
+        } else {
+            physicalPoint = try await OrientationAwareCoordinates.translate(
+                point: resolution.point,
+                for: simulatorUDID,
+                logger: logger
+            )
+        }
 
         switch resolvedTapStyle(for: resolution) {
         case .physical:

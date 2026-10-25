@@ -135,13 +135,23 @@ struct Init: AsyncParsableCommand {
 
         for target in targets {
             let targetDirectory = target.skillsDirectory.appendingPathComponent("axe", isDirectory: true)
-            guard FileManager.default.fileExists(atPath: targetDirectory.path) else {
+            let targetFile = targetDirectory.appendingPathComponent("SKILL.md", isDirectory: false)
+            guard FileManager.default.fileExists(atPath: targetFile.path) else {
+                continue
+            }
+            // --dest can point anywhere, so only remove a file that AXe itself installed
+            guard Self.isInstalledAXeSkill(at: targetFile) else {
+                fputs("Skipped \(targetFile.path): not an AXe skill file.\n", stderr)
                 continue
             }
 
             do {
-                try FileManager.default.removeItem(at: targetDirectory)
-                removedPaths.append("\(target.name): \(targetDirectory.path)")
+                try FileManager.default.removeItem(at: targetFile)
+                let remaining = try FileManager.default.contentsOfDirectory(atPath: targetDirectory.path)
+                if remaining.isEmpty {
+                    try FileManager.default.removeItem(at: targetDirectory)
+                }
+                removedPaths.append("\(target.name): \(targetFile.path)")
             } catch {
                 throw CLIError(
                     errorDescription: "Failed to uninstall AXe skill for \(target.name): \(error.localizedDescription)"
@@ -157,6 +167,13 @@ struct Init: AsyncParsableCommand {
         for entry in removedPaths {
             fputs("Removed AXe skill -> \(entry)\n", stdout)
         }
+    }
+
+    private static func isInstalledAXeSkill(at url: URL) -> Bool {
+        guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+            return false
+        }
+        return contents.hasPrefix("---\nname: axe\n")
     }
 
     private func resolveTargets(for operation: Operation) throws -> [ClientInfo] {
